@@ -1,0 +1,9 @@
+# Xcode user data
+**/xcuserdata/
+**/*.xcuserstate
+
+# macOS
+.DS_Store
+
+# Local tooling
+.claude/

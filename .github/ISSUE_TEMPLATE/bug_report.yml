@@ -1,0 +1,148 @@
+name: Bug report
+description: Report a reproducible cursor-fence issue
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please fill out all required fields so we can reproduce accurately.
+
+  - type: input
+    id: game_title
+    attributes:
+      label: Game title
+      description: Exact game name
+      placeholder: Counter-Strike 2
+    validations:
+      required: true
+
+  - type: input
+    id: game_version
+    attributes:
+      label: Game version/build
+      description: Include branch/build info if available
+      placeholder: Steam build 123456
+    validations:
+      required: true
+
+  - type: input
+    id: crossover_version
+    attributes:
+      label: CrossOver/Wine version
+      description: Exact CrossOver version and bottle type
+      placeholder: CrossOver 25.0 + Wine 8.x bottle
+    validations:
+      required: true
+
+  - type: input
+    id: macos_version
+    attributes:
+      label: macOS version
+      description: Include full version number
+      placeholder: macOS 15.3.1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: dock_position
+    attributes:
+      label: Dock position
+      options:
+        - Bottom
+        - Left
+        - Right
+    validations:
+      required: true
+
+  - type: dropdown
+    id: dock_visibility
+    attributes:
+      label: Dock auto-hide setting
+      options:
+        - Always visible
+        - Auto-hide enabled
+    validations:
+      required: true
+
+  - type: textarea
+    id: hot_corners
+    attributes:
+      label: Hot corners configuration
+      description: List each corner action (for example, bottom-right = Quick Note)
+      placeholder: |
+        Top-left: Mission Control
+        Top-right: None
+        Bottom-left: None
+        Bottom-right: Quick Note
+    validations:
+      required: true
+
+  - type: textarea
+    id: displays
+    attributes:
+      label: Display setup
+      description: Monitor count, arrangement, resolutions, and which display runs the game
+      placeholder: |
+        1 display, 2560x1440, game on main display
+    validations:
+      required: true
+
+  - type: dropdown
+    id: game_mode
+    attributes:
+      label: In-app Game Mode toggle
+      options:
+        - Enabled
+        - Disabled
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce_steps
+    attributes:
+      label: Steps to reproduce
+      description: Be precise with actions (mouse movement, RMB/LMB, ESC, alt-tab, etc.)
+      placeholder: |
+        1. Activate MacGamingFix
+        2. Launch game and enter gameplay
+        3. Move camera left for ~3 minutes
+        4. Hold right mouse button to aim
+        5. Cursor appears from left edge
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: Cursor should stay hidden during gameplay.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      placeholder: Cursor briefly appears and crosses the screen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: frequency
+    attributes:
+      label: Frequency
+      description: How often does it happen?
+      placeholder: 3/5 sessions, usually after 5-10 minutes.
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional notes
+      description: Logs, recordings, and extra context
+      placeholder: Include short screen recording link if possible.
+    validations:
+      required: false
