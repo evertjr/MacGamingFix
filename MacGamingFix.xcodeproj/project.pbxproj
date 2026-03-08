@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		59BDBE702F5E3C4D00323648 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 59BDBE6F2F5E3C4D00323648 /* AppIcon.icon */; };
 		A10001 /* MacGamingFixApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10001 /* MacGamingFixApp.swift */; };
 		A10002 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10002 /* AppState.swift */; };
 		A10004 /* CursorFence.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10004 /* CursorFence.swift */; };
@@ -16,6 +17,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		59BDBE6F2F5E3C4D00323648 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		B10001 /* MacGamingFixApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacGamingFixApp.swift; sourceTree = "<group>"; };
 		B10002 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		B10004 /* CursorFence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorFence.swift; sourceTree = "<group>"; };
@@ -42,6 +44,7 @@
 			children = (
 				D10002 /* MacGamingFix */,
 				D10003 /* Products */,
+				59BDBE6F2F5E3C4D00323648 /* AppIcon.icon */,
 			);
 			sourceTree = "<group>";
 		};
@@ -126,6 +129,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10010 /* Assets.xcassets in Resources */,
+				59BDBE702F5E3C4D00323648 /* AppIcon.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -271,6 +275,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = "";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
@@ -282,6 +287,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MacGamingFix/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = MacGamingFix;
+				INFOPLIST_KEY_GCSupportsGameMode = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMainStoryboardFile = "";
@@ -291,7 +297,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = evercraftlabs;
+				PRODUCT_BUNDLE_IDENTIFIER = com.evercraftlabs.MacGamingFix;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -302,6 +308,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = "";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
@@ -313,6 +320,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MacGamingFix/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = MacGamingFix;
+				INFOPLIST_KEY_GCSupportsGameMode = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMainStoryboardFile = "";
@@ -322,7 +330,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = evercraftlabs;
+				PRODUCT_BUNDLE_IDENTIFIER = com.evercraftlabs.MacGamingFix;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
