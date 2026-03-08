@@ -6,13 +6,15 @@ struct MacGamingFixApp: App {
     @StateObject private var appState = AppState()
 
     var body: some Scene {
-        WindowGroup {
+        Window("MacGamingFix", id: "main") {
             SetupView()
                 .environmentObject(appState)
                 .onAppear {
                     appDelegate.appState = appState
                 }
         }
+        .windowResizability(.contentSize)
+        .defaultSize(width: 320, height: 200)
     }
 }
 

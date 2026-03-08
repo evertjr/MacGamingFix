@@ -2,7 +2,12 @@ import SwiftUI
 
 class AppState: ObservableObject {
     @Published var isActive = false
-    @Published var gameModeEnabled = true
+    @Published var gameModeEnabled = true {
+        didSet {
+            guard gameModeEnabled != oldValue else { return }
+            applyGameModePreference()
+        }
+    }
 
     private let cursorFence = CursorFence()
     private let gameMode = GameModeActivator()
@@ -13,6 +18,9 @@ class AppState: ObservableObject {
     var isGameModeAvailable: Bool { gameMode.isAvailable }
 
     init() {
+        // Ensure game mode is reset from any previous session
+        gameMode.deactivate()
+
         cursorFence.onGameExit = { [weak self] in
             self?.deactivate()
         }
@@ -46,10 +54,8 @@ class AppState: ObservableObject {
         cursorFence.activate()
 
         if cursorFence.isActive {
-            if gameModeEnabled && isGameModeAvailable {
-                gameMode.activate()
-            }
             isActive = true
+            applyGameModePreference()
         }
     }
 
@@ -57,9 +63,9 @@ class AppState: ObservableObject {
         guard isActive else { return }
 
         cursorFence.deactivate()
-        gameMode.deactivate()
         trackedGamePID = nil
         isActive = false
+        applyGameModePreference()
     }
 
     func installXcodeTools() {
@@ -95,5 +101,9 @@ class AppState: ObservableObject {
 
         trackedGamePID = app.processIdentifier
         cursorFence.setTrackedGamePID(app.processIdentifier)
+    }
+
+    private func applyGameModePreference() {
+        gameMode.sync(enabled: isActive && gameModeEnabled && isGameModeAvailable)
     }
 }

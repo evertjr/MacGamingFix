@@ -8,38 +8,40 @@ class GameModeActivator {
         isAvailable = checkAvailability()
     }
 
-    func activate() {
-        guard isAvailable, !isActive else { return }
+    func sync(enabled: Bool) {
+        guard isAvailable else { return }
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
-        process.arguments = ["gamepolicyctl", "game-mode", "set", "on"]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        try? process.run()
-        process.waitUntilExit()
+        if enabled {
+            // Avoid duplicate calls while already active.
+            if isActive { return }
+            isActive = setGameMode(to: "on")
+            return
+        }
 
-        isActive = process.terminationStatus == 0
+        // Always force "auto" when disabled so the toggle is authoritative.
+        _ = setGameMode(to: "auto")
+        isActive = false
     }
 
     func deactivate() {
-        guard isActive else { return }
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
-        process.arguments = ["gamepolicyctl", "game-mode", "set", "auto"]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        try? process.run()
-        process.waitUntilExit()
-
-        isActive = false
+        sync(enabled: false)
     }
 
     private func checkAvailability() -> Bool {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
         process.arguments = ["-f", "gamepolicyctl"]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try? process.run()
+        process.waitUntilExit()
+        return process.terminationStatus == 0
+    }
+
+    private func setGameMode(to value: String) -> Bool {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
+        process.arguments = ["gamepolicyctl", "game-mode", "set", value]
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
         try? process.run()
