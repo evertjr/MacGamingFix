@@ -891,6 +891,14 @@ class CursorFence {
 
         // --- Cursor is hidden ---
         if !visible {
+            // If we're actively suppressing and user pressed Escape for game menu, release
+            if activeActuator != .none && hasRecentGameMenuIntent(now: now) {
+                log("DECISION: release (escapeIntent in hidden, actuator=\(activeActuator))")
+                releaseForGameShow()
+                lastVisibleState = false
+                return
+            }
+
             // If we were using scale or IOHID (cursor "visible" to system but visually hidden),
             // and the game itself now hid the cursor, release our actuator.
             if activeActuator == .cursorScale || activeActuator == .ioHID {
@@ -964,9 +972,9 @@ class CursorFence {
         // --- Cursor is visible (and was previously hidden) ---
         let becameVisible = !previousVisible
         if !becameVisible {
-            // Cursor scale doesn't change SLCursorIsVisible, so handle escape intent
-            if activeActuator == .cursorScale && hasRecentGameMenuIntent(now: now) {
-                log("DECISION: release (escapeIntent, scaleActive)")
+            // If any actuator is active and user pressed Escape, release for game menu
+            if activeActuator != .none && hasRecentGameMenuIntent(now: now) {
+                log("DECISION: release (escapeIntent, actuator=\(activeActuator))")
                 releaseForGameShow()
                 lastVisibleState = true
                 return
@@ -1050,6 +1058,13 @@ class CursorFence {
         log("hidden→visible \(geoTag(geo))")
         didAttemptRehideForVisibleEpisode = false
 
+        if hasRecentGameMenuIntent(now: now) {
+            log("DECISION: release (escapeIntent)")
+            releaseForGameShow()
+            lastVisibleState = true
+            return
+        }
+
         if shouldRehideForMenuBarClick(geo: geo) {
             log("DECISION: rehide (menuBarClick)")
             attemptRehide(now: now)
@@ -1060,13 +1075,6 @@ class CursorFence {
         if shouldForceGameplayRehide(now: now) {
             log("DECISION: rehide (gameplayMouseDown)")
             attemptRehide(now: now)
-            lastVisibleState = true
-            return
-        }
-
-        if hasRecentGameMenuIntent(now: now) {
-            log("DECISION: release (escapeIntent)")
-            releaseForGameShow()
             lastVisibleState = true
             return
         }
