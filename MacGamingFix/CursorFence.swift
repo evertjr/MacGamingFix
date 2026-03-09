@@ -278,7 +278,6 @@ class CursorFence {
     func activate() {
         guard !isActive else { return }
         resetAllState()
-        requestAccessibilityTrustIfNeeded()
         detectDock()
         setCursorBackgroundControl(enabled: true)
         registerDisplayReconfigurationCallback()
@@ -599,12 +598,6 @@ class CursorFence {
         return displayIsCaptured(CGMainDisplayID()) != 0
     }
 
-    private func requestAccessibilityTrustIfNeeded() {
-        guard !AXIsProcessTrusted() else { return }
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        _ = AXIsProcessTrustedWithOptions(options)
-    }
-
     // MARK: - Display reconfiguration
 
     private func registerDisplayReconfigurationCallback() {
@@ -670,63 +663,52 @@ class CursorFence {
         }
     }
 
-    private func screenForMouse() -> NSScreen? {
+    /// Cached per-tick geometry snapshot to avoid redundant system calls
+    private struct TickGeometry {
+        let mousePosition: CGPoint
+        let screen: NSScreen?
+        let atMenuBar: Bool
+        let atHotCorner: Bool
+        let atDockEdge: Bool
+        let atEdge: Bool
+    }
+
+    private func snapshotGeometry() -> TickGeometry {
         let pos = NSEvent.mouseLocation
-        if let matched = NSScreen.screens.first(where: { $0.frame.contains(pos) }) {
-            return matched
+        let screen = NSScreen.screens.first(where: { $0.frame.contains(pos) }) ?? NSScreen.main
+
+        guard let screen else {
+            return TickGeometry(mousePosition: pos, screen: nil, atMenuBar: false, atHotCorner: false, atDockEdge: false, atEdge: false)
         }
-        return NSScreen.main
-    }
 
-    private func isAtMenuBar() -> Bool {
-        let pos = NSEvent.mouseLocation
-        guard let screen = screenForMouse() else { return false }
-        return (screen.frame.maxY - pos.y) < menuBarMargin
-    }
-
-    private func isAtHotCorner() -> Bool {
-        let pos = NSEvent.mouseLocation
-        guard let screen = screenForMouse() else { return false }
-        let frame = screen.frame
-        let nearBottom = (pos.y - frame.minY) < edgeMargin
-        let nearTop = (frame.maxY - pos.y) < edgeMargin
-        let nearLeft = (pos.x - frame.minX) < edgeMargin
-        let nearRight = (frame.maxX - pos.x) < edgeMargin
-        return (nearBottom || nearTop) && (nearLeft || nearRight)
-    }
-
-    private func isAtDockEdge() -> Bool {
-        let pos = NSEvent.mouseLocation
-        guard let screen = screenForMouse() else { return false }
-        guard screen == NSScreen.main else { return false }
         let frame = screen.frame
         let distanceToBottom = pos.y - frame.minY
-        let distanceToLeft = pos.x - frame.minX
-        let distanceToRight = frame.maxX - pos.x
-
-        switch dockPosition {
-        case .bottom:
-            return distanceToBottom < dockThickness
-        case .left:
-            return distanceToLeft < dockThickness
-        case .right:
-            return distanceToRight < dockThickness
-        }
-    }
-
-    private func isAtEdge() -> Bool {
-        let pos = NSEvent.mouseLocation
-        guard let screen = screenForMouse() else { return false }
-        let frame = screen.frame
-        let distanceToBottom = pos.y - frame.minY
+        let distanceToTop = frame.maxY - pos.y
         let distanceToLeft = pos.x - frame.minX
         let distanceToRight = frame.maxX - pos.x
 
         let nearBottom = distanceToBottom < edgeMargin
+        let nearTop = distanceToTop < edgeMargin
         let nearLeft = distanceToLeft < edgeMargin
         let nearRight = distanceToRight < edgeMargin
 
-        return isAtDockEdge() || nearBottom || nearLeft || nearRight
+        let atMenuBar = distanceToTop < menuBarMargin
+        let atHotCorner = (nearBottom || nearTop) && (nearLeft || nearRight)
+
+        let atDockEdge: Bool
+        if screen == NSScreen.main {
+            switch dockPosition {
+            case .bottom: atDockEdge = distanceToBottom < dockThickness
+            case .left:   atDockEdge = distanceToLeft < dockThickness
+            case .right:  atDockEdge = distanceToRight < dockThickness
+            }
+        } else {
+            atDockEdge = false
+        }
+
+        let atEdge = atDockEdge || nearBottom || nearLeft || nearRight
+
+        return TickGeometry(mousePosition: pos, screen: screen, atMenuBar: atMenuBar, atHotCorner: atHotCorner, atDockEdge: atDockEdge, atEdge: atEdge)
     }
 
     // MARK: - Decision helpers
@@ -751,14 +733,24 @@ class CursorFence {
         pendingSystemRehideAt = nil
     }
 
+    private func isRecent(_ uptime: TimeInterval?, within window: TimeInterval, now: TimeInterval) -> Bool {
+        guard let uptime else { return false }
+        return (now - uptime) <= window
+    }
+
+    private func clearPendingReveal() {
+        pendingRevealDecisionAt = nil
+        pendingRevealStartMousePosition = nil
+    }
+
     private func logHideFailureIfNeeded(now: TimeInterval, message: String) {
         guard (now - lastHideFailureLogUptime) >= hideFailureLogInterval else { return }
         lastHideFailureLogUptime = now
         print(message)
     }
 
-    private func shouldRehideForMenuBarClick() -> Bool {
-        isAtMenuBar() && NSEvent.pressedMouseButtons != 0
+    private func shouldRehideForMenuBarClick(geo: TickGeometry) -> Bool {
+        geo.atMenuBar && NSEvent.pressedMouseButtons != 0
     }
 
     private func hasRecentGameMenuIntent(now: TimeInterval) -> Bool {
@@ -771,58 +763,25 @@ class CursorFence {
     }
 
     private func hasRecentDockLeakEvidence(now: TimeInterval) -> Bool {
-        if let dockEntryTime = lastDockEntryUptime, (now - dockEntryTime) <= dockEntryWindow {
-            return true
-        }
-        if let dockMotionTime = lastHiddenDockMotionUptime, (now - dockMotionTime) <= dockMotionWindow {
-            return true
-        }
-        return false
+        isRecent(lastDockEntryUptime, within: dockEntryWindow, now: now)
+            || isRecent(lastHiddenDockMotionUptime, within: dockMotionWindow, now: now)
     }
 
-    private func shouldRehideForSystemReveal(now: TimeInterval) -> Bool {
-        let atEdge = isAtEdge()
-        let atDockEdge = isAtDockEdge()
-        let atHotCorner = isAtHotCorner()
+    private func shouldRehideForSystemReveal(now: TimeInterval, geo: TickGeometry) -> Bool {
+        let atEdge = geo.atEdge
+        let atDockEdge = geo.atDockEdge
+        let atHotCorner = geo.atHotCorner
 
-        let hasRecentEdgeEntry: Bool
-        if let edgeEntryTime = lastEdgeEntryUptime {
-            hasRecentEdgeEntry = (now - edgeEntryTime) <= edgeEntryWindow
-        } else {
-            hasRecentEdgeEntry = false
-        }
-
-        let hasRecentDockEntry: Bool
-        if let dockEntryTime = lastDockEntryUptime {
-            hasRecentDockEntry = (now - dockEntryTime) <= dockEntryWindow
-        } else {
-            hasRecentDockEntry = false
-        }
-
-        let hasRecentDockMotion: Bool
-        if let dockMotionTime = lastHiddenDockMotionUptime {
-            hasRecentDockMotion = (now - dockMotionTime) <= dockMotionWindow
-        } else {
-            hasRecentDockMotion = false
-        }
-
-        let hasRecentHotCornerEntry: Bool
-        if let hotCornerEntryTime = lastHotCornerEntryUptime {
-            hasRecentHotCornerEntry = (now - hotCornerEntryTime) <= hotCornerEntryWindow
-        } else {
-            hasRecentHotCornerEntry = false
-        }
+        let hasRecentEdgeEntry = isRecent(lastEdgeEntryUptime, within: edgeEntryWindow, now: now)
+        let hasRecentDockEntry = isRecent(lastDockEntryUptime, within: dockEntryWindow, now: now)
+        let hasRecentDockMotion = isRecent(lastHiddenDockMotionUptime, within: dockMotionWindow, now: now)
+        let hasRecentHotCornerEntry = isRecent(lastHotCornerEntryUptime, within: hotCornerEntryWindow, now: now)
 
         if atDockEdge && hasRecentDockEntry { return true }
         if atHotCorner && hasRecentHotCornerEntry { return true }
         if atDockEdge && hasRecentDockMotion { return true }
 
-        let hasRecentHiddenMotion: Bool
-        if let movedAt = lastHiddenMouseMoveUptime {
-            hasRecentHiddenMotion = (now - movedAt) <= edgeMotionWindow
-        } else {
-            hasRecentHiddenMotion = false
-        }
+        let hasRecentHiddenMotion = isRecent(lastHiddenMouseMoveUptime, within: edgeMotionWindow, now: now)
 
         if let armedUntil = hiddenEdgeSystemArmedUntil {
             if now <= armedUntil {
@@ -863,19 +822,20 @@ class CursorFence {
         }
 
         if CGEventSource.keyState(.hidSystemState, key: CGKeyCode(53)) {
-            lastEscapeKeyDownUptime = ProcessInfo.processInfo.systemUptime
+            lastEscapeKeyDownUptime = now
         }
 
         guard let isVisible = cursorIsVisible else { return }
         let visible = isVisible() != 0
+        let geo = snapshotGeometry()
 
         guard let previousVisible = lastVisibleState else {
             lastVisibleState = visible
             if !visible {
                 wasCursorHidden = true
-                lastHiddenAtEdge = isAtEdge()
-                lastHiddenAtDockEdge = isAtDockEdge()
-                lastHiddenAtHotCorner = isAtHotCorner()
+                lastHiddenAtEdge = geo.atEdge
+                lastHiddenAtDockEdge = geo.atDockEdge
+                lastHiddenAtHotCorner = geo.atHotCorner
             }
             return
         }
@@ -888,61 +848,56 @@ class CursorFence {
                 releaseHides()
             }
 
-            let atEdge = isAtEdge()
-            let atDockEdge = isAtDockEdge()
-            let atHotCorner = isAtHotCorner()
             let becameHidden = previousVisible
-            let mousePosition = NSEvent.mouseLocation
 
             if becameHidden {
                 didAttemptRehideForVisibleEpisode = false
-                lastHiddenAtEdge = atEdge
-                lastHiddenAtDockEdge = atDockEdge
-                lastHiddenAtHotCorner = atHotCorner
+                lastHiddenAtEdge = geo.atEdge
+                lastHiddenAtDockEdge = geo.atDockEdge
+                lastHiddenAtHotCorner = geo.atHotCorner
                 hiddenEdgeSystemArmedUntil = pendingSystemRehide ? (now + edgeSystemArmWindow) : nil
                 lastEdgeEntryUptime = pendingSystemRehide ? now : nil
-                lastDockEntryUptime = pendingSystemRehide && atDockEdge ? now : nil
-                lastHotCornerEntryUptime = pendingSystemRehide && atHotCorner ? now : nil
-                lastHiddenMousePosition = mousePosition
+                lastDockEntryUptime = pendingSystemRehide && geo.atDockEdge ? now : nil
+                lastHotCornerEntryUptime = pendingSystemRehide && geo.atHotCorner ? now : nil
+                lastHiddenMousePosition = geo.mousePosition
                 lastHiddenMouseMoveUptime = nil
                 lastHiddenDockMotionUptime = nil
                 pendingSystemRehide = false
                 pendingSystemRehideAt = nil
-                pendingRevealDecisionAt = nil
-                pendingRevealStartMousePosition = nil
+                clearPendingReveal()
                 DispatchQueue.main.async { [weak self] in
                     self?.onCursorBecameHidden?()
                 }
             } else {
-                if atEdge && !lastHiddenAtEdge {
+                if geo.atEdge && !lastHiddenAtEdge {
                     lastEdgeEntryUptime = now
                     hiddenEdgeSystemArmedUntil = now + edgeSystemArmWindow
                 }
-                if atDockEdge && !lastHiddenAtDockEdge {
+                if geo.atDockEdge && !lastHiddenAtDockEdge {
                     lastDockEntryUptime = now
                     hiddenEdgeSystemArmedUntil = now + edgeSystemArmWindow
                 }
-                if atHotCorner && !lastHiddenAtHotCorner {
+                if geo.atHotCorner && !lastHiddenAtHotCorner {
                     lastHotCornerEntryUptime = now
                     hiddenEdgeSystemArmedUntil = now + edgeSystemArmWindow
                 }
-                lastHiddenAtEdge = atEdge
-                lastHiddenAtDockEdge = atDockEdge
-                lastHiddenAtHotCorner = atHotCorner
+                lastHiddenAtEdge = geo.atEdge
+                lastHiddenAtDockEdge = geo.atDockEdge
+                lastHiddenAtHotCorner = geo.atHotCorner
             }
 
             if !becameHidden {
                 if let lastPosition = lastHiddenMousePosition {
-                    let dx = abs(mousePosition.x - lastPosition.x)
-                    let dy = abs(mousePosition.y - lastPosition.y)
+                    let dx = abs(geo.mousePosition.x - lastPosition.x)
+                    let dy = abs(geo.mousePosition.y - lastPosition.y)
                     if dx >= hiddenMotionDeltaThreshold || dy >= hiddenMotionDeltaThreshold {
                         lastHiddenMouseMoveUptime = now
-                        if atDockEdge {
+                        if geo.atDockEdge {
                             lastHiddenDockMotionUptime = now
                         }
                     }
                 }
-                lastHiddenMousePosition = mousePosition
+                lastHiddenMousePosition = geo.mousePosition
             }
 
             wasCursorHidden = true
@@ -968,48 +923,45 @@ class CursorFence {
 
             if let pendingAt = pendingRevealDecisionAt {
                 if shouldForceGameplayRehide(now: now) {
-                    pendingRevealDecisionAt = nil
-                    pendingRevealStartMousePosition = nil
+                    clearPendingReveal()
                     attemptRehide(now: now)
                     lastVisibleState = true
                     return
                 }
 
                 if hasRecentGameMenuIntent(now: now) {
-                    pendingRevealDecisionAt = nil
-                    pendingRevealStartMousePosition = nil
+                    clearPendingReveal()
                     releaseForGameShow()
                     lastVisibleState = true
                     return
                 }
 
-                if !isAtEdge() {
-                    pendingRevealDecisionAt = nil
-                    pendingRevealStartMousePosition = nil
+                if !geo.atEdge {
+                    clearPendingReveal()
                     releaseForGameShow()
                     lastVisibleState = true
                     return
                 }
 
-                if shouldRehideForSystemReveal(now: now) {
-                    if isAtHotCorner() {
-                        pendingRevealDecisionAt = nil
-                        pendingRevealStartMousePosition = nil
+                if shouldRehideForSystemReveal(now: now, geo: geo) {
+                    if geo.atHotCorner {
+                        clearPendingReveal()
                         attemptRehide(now: now)
                         lastVisibleState = true
                         return
                     }
 
                     if let startPos = pendingRevealStartMousePosition {
-                        let pos = NSEvent.mouseLocation
-                        let movedDistance = max(abs(pos.x - startPos.x), abs(pos.y - startPos.y))
-                        let requiredMotion = isAtDockEdge()
+                        let movedDistance = max(
+                            abs(geo.mousePosition.x - startPos.x),
+                            abs(geo.mousePosition.y - startPos.y)
+                        )
+                        let requiredMotion = geo.atDockEdge
                             ? dockRevealDecisionMotionThreshold
                             : revealDecisionMotionThreshold
 
                         if movedDistance >= requiredMotion {
-                            pendingRevealDecisionAt = nil
-                            pendingRevealStartMousePosition = nil
+                            clearPendingReveal()
                             attemptRehide(now: now)
                             lastVisibleState = true
                             return
@@ -1018,8 +970,7 @@ class CursorFence {
                 }
 
                 if (now - pendingAt) >= revealDecisionWindow {
-                    pendingRevealDecisionAt = nil
-                    pendingRevealStartMousePosition = nil
+                    clearPendingReveal()
                     releaseForGameShow()
                 }
 
@@ -1040,7 +991,7 @@ class CursorFence {
         // --- Cursor just became visible (transition) ---
         didAttemptRehideForVisibleEpisode = false
 
-        if shouldRehideForMenuBarClick() {
+        if shouldRehideForMenuBarClick(geo: geo) {
             attemptRehide(now: now)
             lastVisibleState = true
             return
@@ -1064,15 +1015,15 @@ class CursorFence {
             return
         }
 
-        if isAtHotCorner() && shouldRehideForSystemReveal(now: now) {
+        if geo.atHotCorner && shouldRehideForSystemReveal(now: now, geo: geo) {
             attemptRehide(now: now)
             lastVisibleState = true
             return
         }
 
-        if isAtEdge() {
+        if geo.atEdge {
             pendingRevealDecisionAt = now
-            pendingRevealStartMousePosition = NSEvent.mouseLocation
+            pendingRevealStartMousePosition = geo.mousePosition
             lastVisibleState = true
             return
         }
