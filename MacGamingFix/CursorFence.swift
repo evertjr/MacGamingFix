@@ -172,6 +172,7 @@ class CursorFence {
 
     private var activeActuator: ActiveActuator = .none
     private var cursorScaleConnectionID: CGSConnectionID = 0
+    private var connectionHideConnectionID: CGSConnectionID = 0
     private var ioHIDConnection: io_connect_t = 0
     private var trackedGameConnectionID: CGSConnectionID = 0
     private var lastHideFailureLogUptime: TimeInterval = 0
@@ -416,6 +417,7 @@ class CursorFence {
         lastDockRefreshUptime = 0
         activeActuator = .none
         cursorScaleConnectionID = 0
+        connectionHideConnectionID = 0
         trackedGameConnectionID = 0
         lastHideFailureLogUptime = 0
     }
@@ -438,9 +440,10 @@ class CursorFence {
         }
 
         // 2. Connection-based hide (different code path from display-based)
-        if tryConnectionHide() {
+        if let result = tryConnectionHide() {
             activeActuator = .connectionHide
-            log("Rehide OK via connectionHide")
+            connectionHideConnectionID = result
+            log("Rehide OK via connectionHide (conn=\(result))")
             return
         }
 
@@ -492,18 +495,20 @@ class CursorFence {
         return nil
     }
 
-    private func tryConnectionHide() -> Bool {
-        guard let connectionHideCursor else { return false }
+    private func tryConnectionHide() -> CGSConnectionID? {
+        guard let connectionHideCursor else { return nil }
 
         // Try game's connection first
         if trackedGameConnectionID > 0 {
             let status = connectionHideCursor(trackedGameConnectionID)
-            if status == 0 { return true }
+            if status == 0 { return trackedGameConnectionID }
         }
 
         // Try our own connection
         let status = connectionHideCursor(cid)
-        return status == 0
+        if status == 0 { return cid }
+
+        return nil
     }
 
     private func tryDisplayHide() -> Bool {
@@ -529,11 +534,10 @@ class CursorFence {
         case .connectionHide:
             // Show via connection-based API
             if let connectionShowCursor {
-                _ = connectionShowCursor(cid)
-                if trackedGameConnectionID > 0 {
-                    _ = connectionShowCursor(trackedGameConnectionID)
-                }
+                let connID = connectionHideConnectionID > 0 ? connectionHideConnectionID : cid
+                _ = connectionShowCursor(connID)
             }
+            connectionHideConnectionID = 0
 
         case .displayHide:
             let display = CGMainDisplayID()
@@ -554,6 +558,7 @@ class CursorFence {
                 }
                 ourHideCount = 0
             }
+            connectionHideConnectionID = 0
         }
 
         activeActuator = .none
@@ -760,10 +765,12 @@ class CursorFence {
 
     // MARK: - Decision helpers
 
-    private func releaseForGameShow() {
-        log("Release for game show (was actuator=\(activeActuator))")
+    private func releaseForGameShow(keepHiddenHistory: Bool = false) {
+        log("Release for game show (was actuator=\(activeActuator), keepHiddenHistory=\(keepHiddenHistory))")
         releaseHides()
-        wasCursorHidden = false
+        if !keepHiddenHistory {
+            wasCursorHidden = false
+        }
         lastHiddenAtEdge = false
         lastHiddenAtDockEdge = false
         lastHiddenAtHotCorner = false
@@ -847,6 +854,15 @@ class CursorFence {
         return false
     }
 
+    private func shouldSuppressHiddenEscapeRelease() -> Bool {
+        switch activeActuator {
+        case .connectionHide, .displayHide:
+            return true
+        case .cursorScale, .ioHID, .none:
+            return false
+        }
+    }
+
     // MARK: - Poll loop (decision engine unchanged)
 
     private func poll() {
@@ -893,10 +909,14 @@ class CursorFence {
         if !visible {
             // If we're actively suppressing and user pressed Escape for game menu, release
             if activeActuator != .none && hasRecentGameMenuIntent(now: now) {
-                log("DECISION: release (escapeIntent in hidden, actuator=\(activeActuator))")
-                releaseForGameShow()
-                lastVisibleState = false
-                return
+                if shouldSuppressHiddenEscapeRelease() {
+                    log("DECISION: hold (escapeIntent in hidden, actuator=\(activeActuator))")
+                } else {
+                    log("DECISION: release (escapeIntent in hidden, actuator=\(activeActuator))")
+                    releaseForGameShow(keepHiddenHistory: true)
+                    lastVisibleState = false
+                    return
+                }
             }
 
             // If we were using scale or IOHID (cursor "visible" to system but visually hidden),
@@ -975,7 +995,7 @@ class CursorFence {
             // If any actuator is active and user pressed Escape, release for game menu
             if activeActuator != .none && hasRecentGameMenuIntent(now: now) {
                 log("DECISION: release (escapeIntent, actuator=\(activeActuator))")
-                releaseForGameShow()
+                releaseForGameShow(keepHiddenHistory: true)
                 lastVisibleState = true
                 return
             }
@@ -992,7 +1012,7 @@ class CursorFence {
                 if hasRecentGameMenuIntent(now: now) {
                     log("DECISION: release (pending+escapeIntent)")
                     clearPendingReveal()
-                    releaseForGameShow()
+                    releaseForGameShow(keepHiddenHistory: true)
                     lastVisibleState = true
                     return
                 }
@@ -1060,7 +1080,7 @@ class CursorFence {
 
         if hasRecentGameMenuIntent(now: now) {
             log("DECISION: release (escapeIntent)")
-            releaseForGameShow()
+            releaseForGameShow(keepHiddenHistory: true)
             lastVisibleState = true
             return
         }
