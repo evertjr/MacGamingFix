@@ -70,13 +70,22 @@ MacGamingFix can optionally enable macOS Game Mode via `gamepolicyctl`, which re
 
 - macOS 26 or later
 - CrossOver or Wine game
-- Xcode (for building from source)
 - Optional: Xcode Command Line Tools (for Game Mode)
 
-## Build & Run
+## Installation
 
-1. Open `MacGamingFix.xcodeproj` in Xcode.
-2. Build and run (Cmd+R).
+1. Download the latest `.zip` from the [Releases](../../releases/latest) page.
+2. Unzip and drag **MacGamingFix.app** to your Applications folder.
+3. On first launch, macOS Gatekeeper will block the app because it is not signed or notarized (see [why](#why-unsigned) below). To open it:
+   - Right-click (or Control-click) the app and select **Open**.
+   - Click **Open** in the dialog that appears.
+   - You only need to do this once — subsequent launches will work normally.
+
+### Why unsigned?
+
+MacGamingFix relies on private macOS APIs (`SkyLight`, `CoreGraphics`) loaded at runtime via `dlsym`. Apple's notarization process requires Hardened Runtime and App Sandbox, both of which block the private API access this app needs to function. Signing without notarization would still trigger Gatekeeper warnings, so distributing unsigned is the pragmatic choice for this type of utility.
+
+The app is fully open source — you can always audit the code and [build from source](#build-from-source) if you prefer.
 
 ## Usage
 
@@ -84,6 +93,14 @@ MacGamingFix can optionally enable macOS Game Mode via `gamepolicyctl`, which re
 2. Tap **Cursor Fix** to activate.
 3. Switch to your game and play.
 4. Tap **Cursor Fix** again to deactivate when done.
+
+## Build from Source
+
+If you'd rather build it yourself:
+
+1. Clone the repository.
+2. Open `MacGamingFix.xcodeproj` in Xcode.
+3. Build and run (Cmd+R).
 
 ## Limitations
 
