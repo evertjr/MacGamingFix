@@ -14,57 +14,25 @@
 
 ## The Problem
 
-CrossOver and Wine translate Windows games to run on macOS, but they share the macOS system cursor directly as the in-game cursor. During FPS gameplay, the game hides the cursor via `CGDisplayHideCursor`, but an invisible "ghost cursor" continues drifting independently with mouse movement.
+The cursor appearing during gameplay is a well-known problem on most games running through translation layers on macOS. It happens because Windows games don't request the correct presentation mode, so the game renders above the system UI instead of replacing it. While this sounds simple to fix, it's a comically hard problem — the macOS system cursor lives as an invisible "ghost" that keeps drifting with mouse movement even after the game hides it. When this ghost cursor reaches a hot zone (Dock, menu bar, hot corners), macOS forces the cursor visible, causing a disruptive flash over your game.
 
-When this ghost cursor enters macOS hot zones (Dock, menu bar, hot corners), the WindowServer forces the cursor visible, causing a disruptive system cursor to flash over your game. This is a well-known and long-standing issue with no official fix.
+The fact that CrossOver and Wine have left this unsolved for so many years suggests there isn't much they can do on their side — it's the game process that should request the correct presentation mode, and a translation layer can't easily fake that.
+
+### Common workarounds
+
+- **Running macOS at a larger scale than the game** — the game maps its area to coordinates that don't touch the hot zones. Works, but forces you into a non-native resolution.
+- **Playing with a gamepad** — avoids mouse movement entirely, so the ghost cursor never drifts into hot zones. Not an option for games that need mouse input.
+- **Apps that fully hide the cursor** — these hide the system cursor entirely, which also hides the in-game cursor when the game intentionally shows it (pause menus, inventory screens), leaving users reliant on keyboard shortcuts to navigate.
 
 ## How MacGamingFix Works
 
-MacGamingFix uses a heuristic-based approach to distinguish between two events that look identical at the API level:
+MacGamingFix monitors both what the game requested and where the cursor is positioned, and attempts to determine whether a cursor appearance is a false positive (ghost cursor hitting a hot zone) or a legitimate reason to show the cursor (the game intentionally revealed it). When it's a false positive, the cursor gets re-hidden before the next frame — fast enough that the user never sees it. When it's intentional, MacGamingFix steps aside.
 
-1. **System trigger**: Ghost cursor drifts into a hot zone, macOS forces it visible. We must re-hide immediately.
-2. **Game trigger**: The game intentionally calls `ShowCursor` (pause menu, inventory, etc.). We must not interfere.
-
-### The Cursor Fence
-
-The core is a high-frequency polling loop (1000Hz via `DispatchSourceTimer`) that monitors cursor visibility and applies different heuristics per trigger zone:
-
-- **Menu bar**: Click-triggered. Re-hides only when `NSEvent.pressedMouseButtons != 0` (the user clicked into the menu bar area).
-- **Dock**: Hover-triggered. Tracks cursor position transitions while hidden. If the cursor *entered* the dock zone while hidden (outside to inside), a system trigger is expected. If the cursor was already there when the game hid it, the next show is from the game.
-- **Hot corners**: Hover-triggered with extended detection windows. Uses the same entry-tracking approach as the dock.
-- **Screen edges**: General edge detection with motion tracking to catch rapid cursor movements into trigger zones.
-
-When a system trigger is detected, the fence re-hides the cursor. When the game shows the cursor intentionally, the fence releases all accumulated hides and hands control back.
-
-### Private APIs
-
-MacGamingFix uses several private/undocumented macOS APIs loaded at runtime via `dlsym`:
-
-| API | Framework | Purpose |
-|-----|-----------|---------|
-| `SLCursorIsVisible()` | SkyLight | Query cursor visibility state (replaces deprecated `CGCursorIsVisible`) |
-| `SLDisplayHideCursor(displayID)` | SkyLight | Hide the cursor on a display (replaces deprecated `CGDisplayHideCursor`) |
-| `SLDisplayShowCursor(displayID)` | SkyLight | Show the cursor on a display (replaces deprecated `CGDisplayShowCursor`) |
-| `CGSMainConnectionID()` | CoreGraphics | Get the main connection ID for WindowServer communication |
-| `CGSSetConnectionProperty(cid, cid, key, value)` | CoreGraphics | Set the `SetsCursorInBackground` property, allowing cursor hide/show to work even when our app is not frontmost |
-
-The `SetsCursorInBackground` connection property is critical. Without it, `SLDisplayHideCursor` only works when our app is the active application, which is never the case during gameplay.
-
-### Hide/Show Counter
-
-`CGDisplayHideCursor` and `SLDisplayHideCursor` use a **counter**, not a boolean. Each hide call decrements the counter, each show call increments it. The cursor is only visible when the counter is >= 0. This means:
-
-- Calling hide N times requires N matching show calls to make the cursor visible again
-- The fence tracks `ourHideCount` to know exactly how many hides to undo
-- When releasing control back to the game, `releaseHides()` calls show exactly `ourHideCount` times
-
-### Game Detection
-
-The app automatically detects which game is running. When the cursor first becomes hidden (indicating a game has captured it), the fence captures the frontmost application as the tracked game. If you switch to a different app, the fence forces the cursor visible so you can interact normally.
+It uses private macOS APIs to track cursor visibility state over time and applies multiple hiding strategies to handle games that resist standard cursor control.
 
 ### Game Mode
 
-MacGamingFix can optionally enable macOS Game Mode via `gamepolicyctl`, which reduces Bluetooth audio/input latency and prioritizes CPU/GPU scheduling for your game. This requires Xcode Command Line Tools to be installed.
+MacGamingFix can optionally enable macOS Game Mode, which reduces Bluetooth audio/input latency and prioritizes CPU/GPU scheduling for your game. This requires Xcode Command Line Tools to be installed.
 
 ## Requirements
 
@@ -99,7 +67,7 @@ The app is fully open source — you can always audit the code and [build from s
 If you'd rather build it yourself:
 
 1. Clone the repository.
-2. Open `MacGamingFix.xcodeproj` in Xcode.
+2. Open `MacGamingFix.xcodeproj` in Xcode 26+.
 3. Build and run (Cmd+R).
 
 ## Limitations
