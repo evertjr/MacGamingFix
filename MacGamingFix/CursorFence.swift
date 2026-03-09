@@ -113,7 +113,7 @@ class CursorFence {
         setConnectionProperty?(cid, cid, "SetsCursorInBackground" as CFString, kCFBooleanTrue)
 
         let timer = DispatchSource.makeTimerSource(queue: .global(qos: .userInteractive))
-        timer.schedule(deadline: .now(), repeating: .microseconds(500))
+        timer.schedule(deadline: .now(), repeating: .milliseconds(1))
         timer.setEventHandler { [weak self] in
             self?.poll()
         }
