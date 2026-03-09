@@ -90,6 +90,8 @@ struct SetupView: View {
             cursorFixCard
             Divider().padding(.horizontal, 8)
             gameModeCard
+            Divider().padding(.horizontal, 8)
+            diagnosticCard
         }
         .padding(.horizontal, 16)
         .glassEffect(in: .rect(cornerRadius: 16))
@@ -133,6 +135,38 @@ struct SetupView: View {
                 appState.gameModeEnabled.toggle()
             } else {
                 appState.installXcodeTools()
+            }
+        }
+    }
+
+    // MARK: - Diagnostics
+
+    @State private var didCopyLog = false
+
+    private var diagnosticCard: some View {
+        HStack(spacing: 0) {
+            FeatureCard(
+                icon: "waveform.badge.magnifyingglass",
+                title: "Diagnostics",
+                subtitle: appState.isLogging ? "Recording trace..." : "Tap to start recording",
+                isActive: appState.isLogging,
+                info: "Records a detailed trace of cursor hide/show decisions. Start recording, reproduce the issue, then come back and copy the log to your clipboard to share in a bug report."
+            ) {
+                appState.toggleLogging()
+                didCopyLog = false
+            }
+
+            if appState.isLogging || didCopyLog {
+                Button {
+                    appState.copyLogToClipboard()
+                    didCopyLog = true
+                } label: {
+                    Image(systemName: didCopyLog ? "checkmark" : "doc.on.doc")
+                        .font(.caption)
+                        .foregroundStyle(didCopyLog ? .green : .secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Copy log to clipboard")
             }
         }
     }

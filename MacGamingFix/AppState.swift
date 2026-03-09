@@ -2,6 +2,7 @@ import SwiftUI
 
 class AppState: ObservableObject {
     @Published var isActive = false
+    @Published var isLogging = false
     @Published var gameModeEnabled = true {
         didSet {
             guard gameModeEnabled != oldValue else { return }
@@ -66,6 +67,21 @@ class AppState: ObservableObject {
         trackedGamePID = nil
         isActive = false
         applyGameModePreference()
+    }
+
+    func toggleLogging() {
+        isLogging.toggle()
+        if isLogging {
+            cursorFence.startLogging()
+        } else {
+            cursorFence.stopLogging()
+        }
+    }
+
+    func copyLogToClipboard() {
+        let log = cursorFence.exportLog()
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(log.isEmpty ? "(no log entries)" : log, forType: .string)
     }
 
     func installXcodeTools() {

@@ -9,9 +9,58 @@ import IOKit
 /// - If cursor is already visible → don't touch it
 class CursorFence {
     private(set) var isActive = false
+    var isLoggingEnabled = false
 
     private var pollTimer: DispatchSourceTimer?
     private let pollQueue = DispatchQueue(label: "CursorFence.pollQueue", qos: .userInteractive)
+
+    // MARK: - Diagnostic logging
+
+    private var logEntries: [String] = []
+    private var logStartUptime: TimeInterval = 0
+    private let maxLogEntries = 10_000
+
+    private func log(_ message: String) {
+        guard isLoggingEnabled else { return }
+        let elapsed = ProcessInfo.processInfo.systemUptime - logStartUptime
+        let entry = String(format: "[%8.3f] %@", elapsed, message)
+        if logEntries.count >= maxLogEntries {
+            logEntries.removeFirst(logEntries.count - maxLogEntries + 1)
+        }
+        logEntries.append(entry)
+    }
+
+    func startLogging() {
+        pollQueue.async {
+            self.logEntries.removeAll()
+            self.logStartUptime = ProcessInfo.processInfo.systemUptime
+            self.isLoggingEnabled = true
+            self.log("Logging started — active=\(self.isActive), gamePID=\(self.gamePID), gameConn=\(self.trackedGameConnectionID), actuator=\(self.activeActuator)")
+        }
+    }
+
+    func stopLogging() {
+        pollQueue.async {
+            self.log("Logging stopped")
+            self.isLoggingEnabled = false
+        }
+    }
+
+    func exportLog() -> String {
+        pollQueue.sync {
+            logEntries.joined(separator: "\n")
+        }
+    }
+
+    private func geoTag(_ geo: TickGeometry) -> String {
+        let flags = [
+            geo.atEdge ? "edge" : nil,
+            geo.atDockEdge ? "dock" : nil,
+            geo.atHotCorner ? "corner" : nil,
+            geo.atMenuBar ? "menu" : nil,
+        ].compactMap { $0 }.joined(separator: ",")
+        return "pos=(\(Int(geo.mousePosition.x)),\(Int(geo.mousePosition.y))) [\(flags.isEmpty ? "none" : flags)]"
+    }
     private var activityToken: NSObjectProtocol?
     private var didRegisterDisplayReconfigurationCallback = false
     private var gamePID: pid_t = 0
@@ -298,6 +347,7 @@ class CursorFence {
         pollTimer = timer
 
         isActive = true
+        log("Activated")
         print("CursorFence: Active")
     }
 
@@ -318,10 +368,12 @@ class CursorFence {
         resetAllState()
 
         isActive = false
+        log("Deactivated")
         print("CursorFence: Deactivated")
     }
 
     func forceRevealCursor() {
+        log("Force reveal cursor")
         releaseForGameShow()
 
         guard let isVisible = cursorIsVisible else {
@@ -347,6 +399,7 @@ class CursorFence {
         }
 
         gamePID = pid
+        log("Tracking PID \(pid)")
         print("CursorFence: Tracking PID \(pid)")
         refreshTrackedGameConnectionID()
     }
@@ -395,12 +448,14 @@ class CursorFence {
         if let result = tryCursorScaleHide(preferGameConnection: captured) {
             activeActuator = .cursorScale
             cursorScaleConnectionID = result
+            log("Rehide OK via cursorScale (conn=\(result))")
             return
         }
 
         // 2. Connection-based hide (different code path from display-based)
         if tryConnectionHide() {
             activeActuator = .connectionHide
+            log("Rehide OK via connectionHide")
             return
         }
 
@@ -410,15 +465,18 @@ class CursorFence {
             ourHideCount += 1
             pendingSystemRehide = true
             pendingSystemRehideAt = now
+            log("Rehide OK via displayHide")
             return
         }
 
         // 4. IOHID cursor disable (below WindowServer, nuclear option)
         if tryIOHIDHide() {
             activeActuator = .ioHID
+            log("Rehide OK via ioHID")
             return
         }
 
+        log("All actuators FAILED captured=\(captured) gameConn=\(trackedGameConnectionID)")
         logHideFailureIfNeeded(
             now: now,
             message: "CursorFence: All actuators failed, captured=\(captured), gameConn=\(trackedGameConnectionID)"
@@ -581,6 +639,7 @@ class CursorFence {
 
         if trackedGameConnectionID != resolved {
             trackedGameConnectionID = resolved
+            log("Game connection ID \(resolved)")
             print("CursorFence: Game connection ID \(resolved)")
         }
     }
@@ -624,6 +683,7 @@ class CursorFence {
 
     private func handleDisplayReconfiguration() {
         guard isActive else { return }
+        log("Display reconfiguration")
         detectDock()
         setCursorBackgroundControl(enabled: true)
         if gamePID > 0 {
@@ -714,6 +774,7 @@ class CursorFence {
     // MARK: - Decision helpers
 
     private func releaseForGameShow() {
+        log("Release for game show (was actuator=\(activeActuator))")
         releaseHides()
         wasCursorHidden = false
         lastHiddenAtEdge = false
@@ -815,6 +876,7 @@ class CursorFence {
         }
 
         if gamePID > 0 && kill(gamePID, 0) != 0 && errno == ESRCH {
+            log("Game exited (PID \(gamePID))")
             DispatchQueue.main.async { [weak self] in
                 self?.onGameExit?()
             }
@@ -851,6 +913,7 @@ class CursorFence {
             let becameHidden = previousVisible
 
             if becameHidden {
+                log("visible→hidden \(geoTag(geo))")
                 didAttemptRehideForVisibleEpisode = false
                 lastHiddenAtEdge = geo.atEdge
                 lastHiddenAtDockEdge = geo.atDockEdge
@@ -916,6 +979,7 @@ class CursorFence {
         if !becameVisible {
             // Cursor scale doesn't change SLCursorIsVisible, so handle escape intent
             if activeActuator == .cursorScale && hasRecentGameMenuIntent(now: now) {
+                log("DECISION: release (escapeIntent, scaleActive)")
                 releaseForGameShow()
                 lastVisibleState = true
                 return
@@ -923,6 +987,7 @@ class CursorFence {
 
             if let pendingAt = pendingRevealDecisionAt {
                 if shouldForceGameplayRehide(now: now) {
+                    log("DECISION: rehide (pending+mouseDown)")
                     clearPendingReveal()
                     attemptRehide(now: now)
                     lastVisibleState = true
@@ -930,6 +995,7 @@ class CursorFence {
                 }
 
                 if hasRecentGameMenuIntent(now: now) {
+                    log("DECISION: release (pending+escapeIntent)")
                     clearPendingReveal()
                     releaseForGameShow()
                     lastVisibleState = true
@@ -937,6 +1003,7 @@ class CursorFence {
                 }
 
                 if !geo.atEdge {
+                    log("DECISION: release (pending+leftEdge)")
                     clearPendingReveal()
                     releaseForGameShow()
                     lastVisibleState = true
@@ -945,6 +1012,7 @@ class CursorFence {
 
                 if shouldRehideForSystemReveal(now: now, geo: geo) {
                     if geo.atHotCorner {
+                        log("DECISION: rehide (pending+hotCorner)")
                         clearPendingReveal()
                         attemptRehide(now: now)
                         lastVisibleState = true
@@ -961,6 +1029,7 @@ class CursorFence {
                             : revealDecisionMotionThreshold
 
                         if movedDistance >= requiredMotion {
+                            log("DECISION: rehide (pending+edgeMotion dist=\(String(format: "%.1f", movedDistance)))")
                             clearPendingReveal()
                             attemptRehide(now: now)
                             lastVisibleState = true
@@ -970,6 +1039,7 @@ class CursorFence {
                 }
 
                 if (now - pendingAt) >= revealDecisionWindow {
+                    log("DECISION: release (pending expired)")
                     clearPendingReveal()
                     releaseForGameShow()
                 }
@@ -982,6 +1052,7 @@ class CursorFence {
                 let attemptedAt = pendingSystemRehideAt,
                 (now - attemptedAt) >= rehideFallbackWindow
             {
+                log("DECISION: release (systemRehide fallback)")
                 releaseForGameShow()
             }
             lastVisibleState = true
@@ -989,45 +1060,53 @@ class CursorFence {
         }
 
         // --- Cursor just became visible (transition) ---
+        log("hidden→visible \(geoTag(geo))")
         didAttemptRehideForVisibleEpisode = false
 
         if shouldRehideForMenuBarClick(geo: geo) {
+            log("DECISION: rehide (menuBarClick)")
             attemptRehide(now: now)
             lastVisibleState = true
             return
         }
 
         if shouldForceGameplayRehide(now: now) {
+            log("DECISION: rehide (gameplayMouseDown)")
             attemptRehide(now: now)
             lastVisibleState = true
             return
         }
 
         if hasRecentGameMenuIntent(now: now) {
+            log("DECISION: release (escapeIntent)")
             releaseForGameShow()
             lastVisibleState = true
             return
         }
 
         if hasRecentDockLeakEvidence(now: now) {
+            log("DECISION: rehide (dockLeak)")
             attemptRehide(now: now)
             lastVisibleState = true
             return
         }
 
         if geo.atHotCorner && shouldRehideForSystemReveal(now: now, geo: geo) {
+            log("DECISION: rehide (hotCorner)")
             attemptRehide(now: now)
             lastVisibleState = true
             return
         }
 
         if geo.atEdge {
+            log("DECISION: pendingReveal (atEdge)")
             pendingRevealDecisionAt = now
             pendingRevealStartMousePosition = geo.mousePosition
             lastVisibleState = true
             return
         }
 
+        log("DECISION: release (notAtEdge)")
         releaseForGameShow()
         lastVisibleState = true
     }
