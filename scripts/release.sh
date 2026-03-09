@@ -28,12 +28,33 @@ if [[ -n "$(git status --porcelain)" ]]; then
   error "Working tree is dirty. Commit or stash your changes first."
 fi
 
-# --- Determine version ---
-VERSION="${1:-}"
+# --- Parse arguments ---
+VERSION=""
+NOTES=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -m)
+      shift
+      NOTES="${1:-}"
+      [[ -z "$NOTES" ]] && error "Missing value for -m flag."
+      shift
+      ;;
+    -*)
+      error "Unknown flag: $1"
+      ;;
+    *)
+      VERSION="$1"
+      shift
+      ;;
+  esac
+done
+
 if [[ -z "$VERSION" ]]; then
-  echo -e "\n${BOLD}Usage:${NC} ./scripts/release.sh <version>"
+  echo -e "\n${BOLD}Usage:${NC} ./scripts/release.sh <version> [-m \"release notes\"]"
   echo -e "  Example: ./scripts/release.sh 1.0.0"
-  echo -e "  Example: ./scripts/release.sh 1.1.0-beta.1\n"
+  echo -e "  Example: ./scripts/release.sh 1.1.0 -m \"Bug fixes and performance improvements.\""
+  echo -e "\n  If -m is omitted, your \$EDITOR will open for writing notes.\n"
   exit 1
 fi
 
@@ -96,21 +117,22 @@ if [[ "$VERSION" == *-* ]]; then
   IS_PRERELEASE="--prerelease"
 fi
 
-# Open editor for release notes
-NOTES_FILE=$(mktemp)
-echo "# Release notes for $APP_NAME $VERSION" > "$NOTES_FILE"
-echo "# Lines starting with # will be ignored." >> "$NOTES_FILE"
-echo "" >> "$NOTES_FILE"
-
-info "Opening editor for release notes..."
-"${EDITOR:-vim}" "$NOTES_FILE"
-
-# Strip comment lines and check for content
-NOTES=$(grep -v '^#' "$NOTES_FILE" | sed '/^$/N;/^\n$/d')
-rm -f "$NOTES_FILE"
-
+# Collect release notes (editor or -m flag)
 if [[ -z "$NOTES" ]]; then
-  error "Empty release notes. Aborting release."
+  NOTES_FILE=$(mktemp)
+  echo "# Release notes for $APP_NAME $VERSION" > "$NOTES_FILE"
+  echo "# Lines starting with # will be ignored." >> "$NOTES_FILE"
+  echo "" >> "$NOTES_FILE"
+
+  info "Opening editor for release notes..."
+  "${EDITOR:-vim}" "$NOTES_FILE"
+
+  NOTES=$(grep -v '^#' "$NOTES_FILE" | sed '/^$/N;/^\n$/d')
+  rm -f "$NOTES_FILE"
+
+  if [[ -z "$NOTES" ]]; then
+    error "Empty release notes. Aborting release."
+  fi
 fi
 
 info "Creating GitHub release..."
