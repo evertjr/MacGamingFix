@@ -1,6 +1,4 @@
 import AppKit
-import ApplicationServices
-import Carbon.HIToolbox
 import CoreGraphics
 import IOKit
 
@@ -118,13 +116,8 @@ class CursorFence {
     // IOHID cursor enable/disable
     private var ioHIDSetCursorEnable: (@convention(c) (io_connect_t, boolean_t) -> kern_return_t)?
 
-    // Game connection ID resolution
-    private var getProcessForPID: (@convention(c) (pid_t, UnsafeMutablePointer<ProcessSerialNumber>) -> OSStatus)?
-    private var getConnectionIDForPSN: (@convention(c) (
-        CGSConnectionID,
-        UnsafeMutablePointer<ProcessSerialNumber>,
-        UnsafeMutablePointer<CGSConnectionID>
-    ) -> Int32)?
+    // Game connection ID resolution (via window owner lookup)
+    private var getWindowOwner: (@convention(c) (CGSConnectionID, Int32, UnsafeMutablePointer<CGSConnectionID>) -> Int32)?
 
     // MARK: - Tuning constants
 
@@ -225,8 +218,8 @@ class CursorFence {
         // Display capture check — try public API first, then private
         resolveDisplayCapturedSymbol(skylight: skylight, handle: handle)
 
-        // Game connection resolution
-        resolveConnectionLookupSymbols(skylight: skylight, handle: handle)
+        // Window owner (for game connection resolution)
+        resolveWindowOwnerSymbol(skylight: skylight, handle: handle)
 
         // IOKit HID cursor
         resolveIOHIDSymbol(iokit: iokit, handle: handle)
@@ -285,17 +278,10 @@ class CursorFence {
         }
     }
 
-    private func resolveConnectionLookupSymbols(skylight: UnsafeMutableRawPointer?, handle: UnsafeMutableRawPointer?) {
-        if let s = dlsym(skylight, "CGSGetConnectionIDForPSN") ?? dlsym(handle, "CGSGetConnectionIDForPSN") {
-            getConnectionIDForPSN = unsafeBitCast(s, to: (@convention(c) (
-                CGSConnectionID,
-                UnsafeMutablePointer<ProcessSerialNumber>,
-                UnsafeMutablePointer<CGSConnectionID>
-            ) -> Int32).self)
-        }
-
-        if let s = dlsym(handle, "GetProcessForPID") {
-            getProcessForPID = unsafeBitCast(s, to: (@convention(c) (pid_t, UnsafeMutablePointer<ProcessSerialNumber>) -> OSStatus).self)
+    private func resolveWindowOwnerSymbol(skylight: UnsafeMutableRawPointer?, handle: UnsafeMutableRawPointer?) {
+        let sym = dlsym(skylight, "SLSGetWindowOwner") ?? dlsym(handle, "CGSGetWindowOwner")
+        if let sym {
+            getWindowOwner = unsafeBitCast(sym, to: (@convention(c) (CGSConnectionID, Int32, UnsafeMutablePointer<CGSConnectionID>) -> Int32).self)
         }
     }
 
@@ -318,8 +304,7 @@ class CursorFence {
         print("  SLSSetCursorScale       → \(setCursorScale != nil ? "OK" : "MISSING")")
         print("  CGDisplayIsCaptured     → \(displayIsCaptured != nil ? "OK" : "MISSING")")
         print("  IOHIDSetCursorEnable    → \(ioHIDSetCursorEnable != nil ? "OK" : "MISSING")")
-        print("  GetProcessForPID        → \(getProcessForPID != nil ? "OK" : "MISSING")")
-        print("  CGSGetConnectionIDForPSN→ \(getConnectionIDForPSN != nil ? "OK" : "MISSING")")
+        print("  SLSGetWindowOwner       → \(getWindowOwner != nil ? "OK" : "MISSING")")
     }
 
     // MARK: - Public API
@@ -623,24 +608,26 @@ class CursorFence {
             trackedGameConnectionID = 0
             return
         }
-        guard let getConnectionIDForPSN, let getProcessForPID else { return }
+        guard let getWindowOwner else { return }
 
-        var psn = ProcessSerialNumber()
-        guard getProcessForPID(gamePID, &psn) == 0 else {
-            trackedGameConnectionID = 0
+        // Find a window owned by the game PID and get its connection ID
+        guard let windowList = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]] else {
             return
         }
 
-        var resolved: CGSConnectionID = 0
-        guard getConnectionIDForPSN(cid, &psn, &resolved) == 0, resolved > 0 else {
-            trackedGameConnectionID = 0
-            return
-        }
+        for window in windowList {
+            guard let ownerPID = window[kCGWindowOwnerPID as String] as? pid_t, ownerPID == gamePID else { continue }
+            guard let windowID = window[kCGWindowNumber as String] as? Int32 else { continue }
 
-        if trackedGameConnectionID != resolved {
-            trackedGameConnectionID = resolved
-            log("Game connection ID \(resolved)")
-            print("CursorFence: Game connection ID \(resolved)")
+            var resolved: CGSConnectionID = 0
+            guard getWindowOwner(cid, windowID, &resolved) == 0, resolved > 0 else { continue }
+
+            if trackedGameConnectionID != resolved {
+                trackedGameConnectionID = resolved
+                log("Game connection ID \(resolved)")
+                print("CursorFence: Game connection ID \(resolved)")
+            }
+            return
         }
     }
 
