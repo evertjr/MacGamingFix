@@ -27,7 +27,7 @@ MacGamingFix uses a heuristic-based approach to distinguish between two events t
 
 ### The Cursor Fence
 
-The core is a high-frequency polling loop (2000Hz via `DispatchSourceTimer`) that monitors cursor visibility and applies different heuristics per trigger zone:
+The core is a high-frequency polling loop (1000Hz via `DispatchSourceTimer`) that monitors cursor visibility and applies different heuristics per trigger zone:
 
 - **Menu bar**: Click-triggered. Re-hides only when `NSEvent.pressedMouseButtons != 0` (the user clicked into the menu bar area).
 - **Dock**: Hover-triggered. Tracks cursor position transitions while hidden. If the cursor *entered* the dock zone while hidden (outside to inside), a system trigger is expected. If the cursor was already there when the game hid it, the next show is from the game.
