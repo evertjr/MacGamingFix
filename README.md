@@ -76,9 +76,9 @@ MacGamingFix can optionally enable macOS Game Mode via `gamepolicyctl`, which re
 
 1. Download the latest `.zip` from the [Releases](../../releases/latest) page.
 2. Unzip and drag **MacGamingFix.app** to your Applications folder.
-3. On first launch, macOS Gatekeeper will block the app because it is not signed or notarized (see [why](#why-unsigned) below). To open it:
-   - Right-click (or Control-click) the app and select **Open**.
-   - Click **Open** in the dialog that appears.
+3. On first launch, macOS will block the app because it is not notarized (see [why](#why-unsigned) below). To allow it:
+   - Try to open the app — macOS will show a warning and prevent it from launching.
+   - Go to **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to the MacGamingFix message.
    - You only need to do this once — subsequent launches will work normally.
 
 ### Why unsigned?
