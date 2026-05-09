@@ -30,9 +30,17 @@ MacGamingFix monitors both what the game requested and where the cursor is posit
 
 It uses private macOS APIs to track cursor visibility state over time and applies multiple hiding strategies to handle games that resist standard cursor control.
 
+### Cursor Toggle Shortcut
+
+MacGamingFix includes a configurable global shortcut for manually showing or hiding the cursor while Cursor Fix is active. The default is `⌃⌥⌘H`, and it can be changed from the app.
+
 ### Game Mode
 
 MacGamingFix can optionally enable macOS Game Mode, which reduces Bluetooth audio/input latency and prioritizes CPU/GPU scheduling for your game. This requires Xcode Command Line Tools to be installed.
+
+### Standard F-Keys
+
+Apple keyboards default F1–F12 to media controls (brightness, volume, etc.). MacGamingFix can temporarily switch them to standard function keys for gaming, and automatically reverts to your original setting when you toggle it off or quit the app.
 
 ## Requirements
 
@@ -44,16 +52,7 @@ MacGamingFix can optionally enable macOS Game Mode, which reduces Bluetooth audi
 
 1. Download the latest `.zip` from the [Releases](../../releases/latest) page.
 2. Unzip and drag **MacGamingFix.app** to your Applications folder.
-3. On first launch, macOS will block the app because it is not notarized (see [why](#why-unsigned) below). To allow it:
-   - Try to open the app — macOS will show a warning and prevent it from launching.
-   - Go to **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to the MacGamingFix message.
-   - You only need to do this once — subsequent launches will work normally.
-
-### Why unsigned?
-
-MacGamingFix relies on private macOS APIs (`SkyLight`, `CoreGraphics`) loaded at runtime via `dlsym`. Apple's notarization process requires Hardened Runtime and App Sandbox, both of which block the private API access this app needs to function. Signing without notarization would still trigger Gatekeeper warnings, so distributing unsigned is the pragmatic choice for this type of utility.
-
-The app is fully open source — you can always audit the code and [build from source](#build-from-source) if you prefer.
+3. Launch the app — it's signed and notarized, so macOS will let it run without any extra steps.
 
 ## Usage
 

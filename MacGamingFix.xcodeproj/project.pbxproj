@@ -12,8 +12,12 @@
 		A10002 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10002 /* AppState.swift */; };
 		A10004 /* CursorFence.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10004 /* CursorFence.swift */; };
 		A10005 /* GameModeActivator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10005 /* GameModeActivator.swift */; };
+		A10006 /* FunctionKeyMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10006 /* FunctionKeyMode.swift */; };
+		A10007 /* AudioSampleRate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10007 /* AudioSampleRate.swift */; };
+		A10008 /* CursorShortcut.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10008 /* CursorShortcut.swift */; };
 		A10009 /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10009 /* SetupView.swift */; };
 		A10010 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10010 /* Assets.xcassets */; };
+		A10013 /* GameSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10013 /* GameSelection.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -22,10 +26,14 @@
 		B10002 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		B10004 /* CursorFence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorFence.swift; sourceTree = "<group>"; };
 		B10005 /* GameModeActivator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameModeActivator.swift; sourceTree = "<group>"; };
+		B10006 /* FunctionKeyMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FunctionKeyMode.swift; sourceTree = "<group>"; };
+		B10007 /* AudioSampleRate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSampleRate.swift; sourceTree = "<group>"; };
+		B10008 /* CursorShortcut.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorShortcut.swift; sourceTree = "<group>"; };
 		B10009 /* SetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupView.swift; sourceTree = "<group>"; };
 		B10010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B10011 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B10012 /* MacGamingFix.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MacGamingFix.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B10013 /* GameSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameSelection.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -55,6 +63,10 @@
 				B10002 /* AppState.swift */,
 				B10004 /* CursorFence.swift */,
 				B10005 /* GameModeActivator.swift */,
+				B10006 /* FunctionKeyMode.swift */,
+				B10007 /* AudioSampleRate.swift */,
+				B10008 /* CursorShortcut.swift */,
+				B10013 /* GameSelection.swift */,
 				B10009 /* SetupView.swift */,
 				B10010 /* Assets.xcassets */,
 				B10011 /* Info.plist */,
@@ -144,6 +156,10 @@
 				A10002 /* AppState.swift in Sources */,
 				A10004 /* CursorFence.swift in Sources */,
 				A10005 /* GameModeActivator.swift in Sources */,
+				A10006 /* FunctionKeyMode.swift in Sources */,
+				A10007 /* AudioSampleRate.swift in Sources */,
+				A10008 /* CursorShortcut.swift in Sources */,
+				A10013 /* GameSelection.swift in Sources */,
 				A10009 /* SetupView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -277,13 +293,14 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = "";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
-				CODE_SIGN_STYLE = Automatic;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEAD_CODE_STRIPPING = YES;
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = 3DQVAT2JGP;
 				ENABLE_APP_SANDBOX = NO;
-				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MacGamingFix/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = MacGamingFix;
@@ -296,9 +313,10 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.evercraftlabs.MacGamingFix;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]" = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -310,13 +328,14 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = "";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
-				CODE_SIGN_STYLE = Automatic;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEAD_CODE_STRIPPING = YES;
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = 3DQVAT2JGP;
 				ENABLE_APP_SANDBOX = NO;
-				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MacGamingFix/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = MacGamingFix;
@@ -329,9 +348,10 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.evercraftlabs.MacGamingFix;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]" = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};

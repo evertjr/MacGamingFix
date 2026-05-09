@@ -14,7 +14,7 @@ struct MacGamingFixApp: App {
                 }
         }
         .windowResizability(.contentSize)
-        .defaultSize(width: 320, height: 200)
+        .defaultSize(width: 320, height: 360)
     }
 }
 

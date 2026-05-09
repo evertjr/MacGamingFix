@@ -359,6 +359,37 @@ class CursorFence {
     }
 
     func forceRevealCursor() {
+        pollQueue.async {
+            self.forceRevealCursorOnQueue()
+        }
+    }
+
+    func toggleCursorVisibility() {
+        pollQueue.async {
+            guard self.isActive else { return }
+
+            if self.activeActuator != .none {
+                self.log("Shortcut toggle cursor visibility → show")
+                self.forceRevealCursorOnQueue()
+                return
+            }
+
+            guard let isVisible = self.cursorIsVisible else {
+                self.log("Shortcut toggle cursor visibility ignored (visibility unavailable)")
+                return
+            }
+
+            if isVisible() != 0 {
+                self.log("Shortcut toggle cursor visibility → hide")
+                self.forceHideCursorOnQueue(now: ProcessInfo.processInfo.systemUptime)
+            } else {
+                self.log("Shortcut toggle cursor visibility → show")
+                self.forceRevealCursorOnQueue()
+            }
+        }
+    }
+
+    private func forceRevealCursorOnQueue() {
         log("Force reveal cursor")
         releaseForGameShow()
 
@@ -375,6 +406,16 @@ class CursorFence {
         }
 
         lastVisibleState = isVisible() != 0
+    }
+
+    private func forceHideCursorOnQueue(now: TimeInterval) {
+        guard isActive else { return }
+
+        clearPendingReveal()
+        didAttemptRehideForVisibleEpisode = false
+        wasCursorHidden = true
+        attemptRehide(now: now)
+        lastVisibleState = cursorIsVisible?() != 0
     }
 
     func setTrackedGamePID(_ pid: pid_t) {
@@ -813,12 +854,19 @@ class CursorFence {
         return (now - escapeDownAt) <= gameMenuIntentWindow
     }
 
-    private func shouldForceGameplayRehide(now: TimeInterval) -> Bool {
-        NSEvent.pressedMouseButtons != 0 && !hasRecentGameMenuIntent(now: now)
+    private func shouldForceGameplayRehide(now: TimeInterval, geo: TickGeometry) -> Bool {
+        guard NSEvent.pressedMouseButtons != 0 else { return false }
+        guard !hasRecentGameMenuIntent(now: now) else { return false }
+
+        return geo.atMenuBar
+            || geo.atEdge
+            || hasRecentDockLeakEvidence(now: now, geo: geo)
     }
 
-    private func hasRecentDockLeakEvidence(now: TimeInterval) -> Bool {
-        isRecent(lastDockEntryUptime, within: dockEntryWindow, now: now)
+    private func hasRecentDockLeakEvidence(now: TimeInterval, geo: TickGeometry) -> Bool {
+        guard geo.atDockEdge || geo.atEdge else { return false }
+
+        return isRecent(lastDockEntryUptime, within: dockEntryWindow, now: now)
             || isRecent(lastHiddenDockMotionUptime, within: dockMotionWindow, now: now)
     }
 
@@ -1001,7 +1049,7 @@ class CursorFence {
             }
 
             if let pendingAt = pendingRevealDecisionAt {
-                if shouldForceGameplayRehide(now: now) {
+                if shouldForceGameplayRehide(now: now, geo: geo) {
                     log("DECISION: rehide (pending+mouseDown)")
                     clearPendingReveal()
                     attemptRehide(now: now)
@@ -1092,14 +1140,14 @@ class CursorFence {
             return
         }
 
-        if shouldForceGameplayRehide(now: now) {
+        if shouldForceGameplayRehide(now: now, geo: geo) {
             log("DECISION: rehide (gameplayMouseDown)")
             attemptRehide(now: now)
             lastVisibleState = true
             return
         }
 
-        if hasRecentDockLeakEvidence(now: now) {
+        if hasRecentDockLeakEvidence(now: now, geo: geo) {
             log("DECISION: rehide (dockLeak)")
             attemptRehide(now: now)
             lastVisibleState = true
