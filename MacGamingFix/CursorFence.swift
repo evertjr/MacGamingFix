@@ -902,15 +902,6 @@ class CursorFence {
         return false
     }
 
-    private func shouldSuppressHiddenEscapeRelease() -> Bool {
-        switch activeActuator {
-        case .connectionHide, .displayHide:
-            return true
-        case .cursorScale, .ioHID, .none:
-            return false
-        }
-    }
-
     // MARK: - Poll loop (decision engine unchanged)
 
     private func poll() {
@@ -934,8 +925,13 @@ class CursorFence {
             return
         }
 
-        if CGEventSource.keyState(.hidSystemState, key: CGKeyCode(53)) {
+        // Keys that across most games mean "I want a menu/inventory/map now."
+        // Movement (WASD) and combat keys (R, F, Q, E, Space, etc.) are excluded.
+        let menuIntentKeyCodes: [CGKeyCode] = [53, 48, 46, 34]  // Esc, Tab, M, I
+        for keyCode in menuIntentKeyCodes
+        where CGEventSource.keyState(.hidSystemState, key: keyCode) {
             lastEscapeKeyDownUptime = now
+            break
         }
 
         guard let isVisible = cursorIsVisible else { return }
@@ -957,14 +953,9 @@ class CursorFence {
         if !visible {
             // If we're actively suppressing and user pressed Escape for game menu, release
             if activeActuator != .none && hasRecentGameMenuIntent(now: now) {
-                if shouldSuppressHiddenEscapeRelease() {
-                    log("DECISION: hold (escapeIntent in hidden, actuator=\(activeActuator))")
-                } else {
-                    log("DECISION: release (escapeIntent in hidden, actuator=\(activeActuator))")
-                    releaseForGameShow(keepHiddenHistory: true)
-                    lastVisibleState = false
-                    return
-                }
+                log("DECISION: forceReveal (escapeIntent in hidden, actuator=\(activeActuator))")
+                forceRevealCursorOnQueue()
+                return
             }
 
             // If we were using scale or IOHID (cursor "visible" to system but visually hidden),
