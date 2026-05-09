@@ -34,6 +34,8 @@ It uses private macOS APIs to track cursor visibility state over time and applie
 
 MacGamingFix includes a configurable global shortcut for manually showing or hiding the cursor while Cursor Fix is active. The default is `⌃⌥⌘H`, and it can be changed from the app.
 
+The shortcut works out of the box in windowed games. **True-fullscreen** games (the kind that captures the display directly) bypass the standard macOS hot-key system, so the shortcut won't fire in them unless MacGamingFix is allowed to listen at a lower layer. To make that possible, the app can optionally install a HID-level keyboard event tap, which macOS gates behind the **Accessibility** permission. Granting it lets the shortcut recover the cursor inside any game, including fullscreen ones; declining keeps the rest of the app fully functional and the shortcut still fires in windowed games. You can enable it any time from the Cursor Toggle popover.
+
 ### Game Mode
 
 MacGamingFix can optionally enable macOS Game Mode, which reduces Bluetooth audio/input latency and prioritizes CPU/GPU scheduling for your game. This requires Xcode Command Line Tools to be installed.
